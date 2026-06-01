@@ -208,44 +208,18 @@
     }
 
     function loop() {
-  requestAnimationFrame(loop);
-
-  // =========================
-  // MediaPipe未準備
-  // =========================
   if (!faceLandmarker || video.readyState < 2) {
+    requestAnimationFrame(loop);
     return;
   }
 
-  // =========================
-  // フレーム間引き（軽量化）
-  // 2フレームに1回だけ処理
-  // =========================
-  frameSkip++;
-
-  if (frameSkip % 2 !== 0) {
-    return;
-  }
-
-  // =========================
-  // 新しい映像フレーム時のみ処理
-  // =========================
   if (video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
 
-    const result = faceLandmarker.detectForVideo(
-      video,
-      performance.now()
-    );
+    const result = faceLandmarker.detectForVideo(video, performance.now());
 
-    // =========================
-    // BlendShape取得
-    // =========================
-    if (result.faceBlendshapes &&
-        result.faceBlendshapes.length > 0) {
-
-      const list =
-        result.faceBlendshapes[0].categories;
+    if (result.faceBlendshapes && result.faceBlendshapes.length > 0) {
+      const list = result.faceBlendshapes[0].categories;
 
       let jaw = 0;
       let smileL = 0;
@@ -253,43 +227,23 @@
       let pucker = 0;
 
       for (const b of list) {
-
-        if (b.categoryName === "jawOpen")
-          jaw = b.score;
-
-        if (b.categoryName === "mouthSmileLeft")
-          smileL = b.score;
-
-        if (b.categoryName === "mouthSmileRight")
-          smileR = b.score;
-
-        if (b.categoryName === "mouthPucker")
-          pucker = b.score;
+        if (b.categoryName === "jawOpen") jaw = b.score;
+        if (b.categoryName === "mouthSmileLeft") smileL = b.score;
+        if (b.categoryName === "mouthSmileRight") smileR = b.score;
+        if (b.categoryName === "mouthPucker") pucker = b.score;
       }
 
       const smile = Math.max(smileL, smileR);
 
-      // =========================
-      // デバッグ表示
-      // 本番ではコメントアウト推奨
-      // =========================
-
-      
       document.getElementById("debugText").innerText =
         `jaw    : ${jaw.toFixed(2)}
-        smile : ${smile.toFixed(2)}
-        pucker: ${pucker.toFixed(2)}`;
-      
+smile : ${smile.toFixed(2)}
+pucker: ${pucker.toFixed(2)}`;
 
-      // =========================
-      // Unityへ送信
-      // =========================
       if (window.unityInstance) {
-
         window.unityInstance.SendMessage(
           "WebMouthReceiver",
           "SetMouthData",
-
           JSON.stringify({
             jawOpen: jaw,
             smile: smile,
@@ -299,8 +253,9 @@
       }
     }
   }
-}
 
+  requestAnimationFrame(loop);
+}
     window.addEventListener("load", async () => {
       await initMediaPipe();
       await initCamera();
