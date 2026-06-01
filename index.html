@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+  <!-- タブ名 -->
+  <title>AIUBEDash</title>
+
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <link rel="stylesheet" href="TemplateData/style.css">
+
+  <!-- カメラワイプ -->
+  <style>
+    #webcamPreview {
+      position: fixed;
+      top: max(20px, env(safe-area-inset-top));
+      left: 20px;
+      transform: scaleX(-1);
+      width: 28vw;
+      max-width: 220px;
+      height: auto;
+      object-fit: cover;
+      border: 2px solid white;
+      border-radius: 8px;
+      z-index: 9999;
+      background: black;
+    }
+
+    #debugText {
+    position: fixed;
+    top: 260px;
+    left: 20px;
+
+    color: white;
+    background: rgba(0,0,0,0.7);
+
+    padding: 10px;
+    border-radius: 8px;
+
+    font-size: 14px;
+    font-family: monospace;
+
+    z-index: 10000;
+
+    white-space: pre-line;
+  }
+  </style>
+</head>
+
+<body>
+  <div id="unity-container" class="unity-desktop">
+    <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
+
+    <div id="unity-loading-bar">
+      <div id="unity-logo"></div>
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
+      </div>
+    </div>
+
+    <div id="unity-warning"></div>
+
+    <div id="unity-footer">
+      <div id="unity-logo-title-footer"></div>
+      <div id="unity-fullscreen-button"></div>
+
+      <!-- 画面右下タイトル -->
+      <div id="unity-build-title">AIUBEDash</div>
+    </div>
+  </div>
+
+  <!-- カメラ表示 -->
+  <video id="webcamPreview" autoplay muted playsinline></video>
+
+  <!-- デバッグ表示 -->
+  <div id="debugText"></div>
+
+  <!-- ===== Unity起動 ===== -->
+  <script>
+    var canvas = document.querySelector("#unity-canvas");
+
+    function unityShowBanner(msg, type) {
+      var warningBanner = document.querySelector("#unity-warning");
+
+      function updateBannerVisibility() {
+        warningBanner.style.display = warningBanner.children.length ? "block" : "none";
+      }
+
+      var div = document.createElement("div");
+      div.innerHTML = msg;
+      warningBanner.appendChild(div);
+
+      if (type == "error") {
+        div.style = "background: red; padding: 10px;";
+      } else {
+        if (type == "warning") div.style = "background: yellow; padding: 10px;";
+        setTimeout(function () {
+          warningBanner.removeChild(div);
+          updateBannerVisibility();
+        }, 5000);
+      }
+
+      updateBannerVisibility();
+    }
+
+    var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/BuildWebGL_02.loader.js";
+
+    var config = {
+      dataUrl: buildUrl + "/BuildWebGL_02.data",
+      frameworkUrl: buildUrl + "/BuildWebGL_02.framework.js",
+      codeUrl: buildUrl + "/BuildWebGL_02.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "AIUBEexerciseRun",
+      productVersion: "0.1",
+      showBanner: unityShowBanner,
+    };
+
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      var meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content =
+        "width=device-width, height=device-height, initial-scale=1.0, user-scalable=no";
+      document.head.appendChild(meta);
+      document.querySelector("#unity-container").className = "unity-mobile";
+      canvas.className = "unity-mobile";
+    } else {
+      canvas.style.width = "960px";
+      canvas.style.height = "600px";
+    }
+
+    document.querySelector("#unity-loading-bar").style.display = "block";
+
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        document.querySelector("#unity-progress-bar-full").style.width =
+          100 * progress + "%";
+      })
+        .then((instance) => {
+          window.unityInstance = instance;
+          console.log("[Unity] OK");
+
+          document.querySelector("#unity-loading-bar").style.display = "none";
+
+          document.querySelector("#unity-fullscreen-button").onclick = () => {
+            instance.SetFullscreen(1);
+          };
+        })
+        .catch((message) => {
+          alert(message);
+        });
+    };
+
+    document.body.appendChild(script);
+  </script>
+
+  <!-- ===== MediaPipe + カメラ ===== -->
+  <script type="module">
+    import {
+      FaceLandmarker,
+      FilesetResolver
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+
+    let faceLandmarker;
+    let video = document.getElementById("webcamPreview");
+    let lastVideoTime = -1;
+
+    async function initCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false
+      });
+
+      video.srcObject = stream;
+
+      video.onloadeddata = () => {
+        console.log("[Camera] OK");
+        requestAnimationFrame(loop);
+      };
+    }
+
+    async function initMediaPipe() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+      );
+
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        outputFaceBlendshapes: true
+      });
+
+      console.log("[MediaPipe] OK");
+    }
+
+    function loop() {
+      if (!faceLandmarker || video.readyState < 2) {
+        requestAnimationFrame(loop);
+        return;
+      }
+
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+
+        const result = faceLandmarker.detectForVideo(video, performance.now());
+
+        if (result.faceBlendshapes && result.faceBlendshapes.length > 0) {
+          const list = result.faceBlendshapes[0].categories;
+
+          let jaw = 0;
+          let smileL = 0;
+          let smileR = 0;
+          let pucker = 0;
+
+          for (const b of list) {
+            if (b.categoryName === "jawOpen") jaw = b.score;
+            if (b.categoryName === "mouthSmileLeft") smileL = b.score;
+            if (b.categoryName === "mouthSmileRight") smileR = b.score;
+            if (b.categoryName === "mouthPucker") pucker = b.score;
+          }
+
+          const smile = Math.max(smileL, smileR);
+
+          document.getElementById("debugText").innerText =
+            `jaw    : ${jaw.toFixed(2)}
+          smile : ${smile.toFixed(2)}
+          pucker: ${pucker.toFixed(2)}`;
+
+          if (window.unityInstance) {
+            window.unityInstance.SendMessage(
+              "WebMouthReceiver",
+              "SetMouthData",
+              JSON.stringify({
+                jawOpen: jaw,
+                smile: smile,
+                pucker: pucker
+              })
+            );
+          }
+        }
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("load", async () => {
+      await initMediaPipe();
+      await initCamera();
+    });
+  </script>
+</body>
+</html>
