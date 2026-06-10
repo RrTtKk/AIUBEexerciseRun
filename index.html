@@ -74,7 +74,7 @@
   <video id="webcamPreview" autoplay muted playsinline></video>
 
   <!-- デバッグ表示 -->
-  <div id="debugText"></div>
+  <!-- div id="debugText"></div -->
 
   <!-- ===== Unity起動 ===== -->
   <script>
@@ -235,10 +235,12 @@
 
       const smile = Math.max(smileL, smileR);
 
+/*
       document.getElementById("debugText").innerText =
         `jaw    : ${jaw.toFixed(2)}
 smile : ${smile.toFixed(2)}
 pucker: ${pucker.toFixed(2)}`;
+*/
 
       if (window.unityInstance) {
         window.unityInstance.SendMessage(
